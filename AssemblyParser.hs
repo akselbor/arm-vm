@@ -62,7 +62,7 @@ instance AssemblyArgParser Reg where
 instance (Constructor c, AssemblyArgParser (f p)) => AssemblyArgParser (C1 c f p) where
   argParser x = do
     string (fmap toLower $ conName x)
-    fmap M1 $ argParser (error "0" `asTypeOf` unM1 x)
+    fmap M1 $ argParser (undefined `asTypeOf` unM1 x)
 
 instance AssemblyArgParser (f p) => AssemblyArgParser (D1 c f p) where
   argParser x = fmap M1 $ argParser (undefined `asTypeOf` unM1 x)
