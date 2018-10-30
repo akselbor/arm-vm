@@ -10,14 +10,17 @@ module Parser
 , choice
 , between
 , peek
+, peekChar
 , item
 , sat
 , char
 , string
+, unsigned
 , number
 , whiteSpace
 , readMaybe
 , joinT
+, preprocess
 , module Control.Applicative
 ) where
 
@@ -101,6 +104,14 @@ char :: (Stream s, MonadPlus m)
      => Char -> ParserT s m Char
 char = sat . (==)
 
+-- | Parse the given character without actually consuming input, or fail otherwise
+peekChar :: (Stream s, MonadPlus m)
+         => Char -> ParserT s m Char
+peekChar c = do
+    c' <- peek
+    guard (c' == c)
+    return c'
+
 -- | Parse the given string, and fail otherwise
 string :: (Stream s, MonadPlus m)
        => String -> ParserT s m String
@@ -128,11 +139,22 @@ whiteSpace :: (Stream s, MonadPlus m)
            => ParserT s m String
 whiteSpace = many (sat isSpace)
 
+-- | Parse a unsigned number
+unsigned :: (Stream s, MonadPlus m, Num a, Read a)
+         => ParserT s m a
+unsigned = do
+    xs <- some (sat isDigit) <|> fail "no digits to parse"
+    (Just num) <- (return $ readMaybe xs) <|> fail ("could not parse \"" ++ xs ++ "\" into a number")
+    return num
+
 -- | Parse a number
 number :: (Stream s, MonadPlus m, Num a, Read a)
        => ParserT s m a
 number = do
     negative <- (char '-' >> return True) <|> return False
-    xs <- some (sat isDigit) <|> fail "no digits to parse"
-    (Just num) <- (return $ readMaybe xs) <|> fail ("could not parse \"" ++ xs ++ "\" into a number")
+    num <- unsigned
     if negative then return (-num) else return num
+
+-- | Preprocess a string
+--preprocess :: (Stream s, MonadPlus m) => (s -> s) -> ParserT s m s
+preprocess f = ParserT $ \xs -> return ((), f xs)

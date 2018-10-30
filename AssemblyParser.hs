@@ -1,6 +1,8 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DataKinds #-}
+-- Temporarily
+{-# LANGUAGE NoMonomorphismRestriction #-}
 module AssemblyParser
 ( parseProgram
 , opParser
@@ -25,7 +27,7 @@ opParseLines = traverse (runParser opParser)
              . lines
              . map toLower
 
-opParser :: (Stream s, MonadPlus m) => ParserT s m Op
+opParser :: (MonadPlus m) => ParserT String m Op
 opParser = fmap to . argParser . from $ (undefined :: Op)
 
 register :: (Stream s, MonadPlus m) => ParserT s m Reg
@@ -34,8 +36,47 @@ register = do
   string "%r"
   number >>= (pure . Reg)
 
-immediate :: (Stream s, MonadPlus m) => ParserT s m Imm
-immediate = number >>= (pure . Imm)
+-- | Defines the usual arithmetic operations, for use in the constExpr parser
+data Operator a = Operator { precondition :: (a -> a -> Bool), op :: (a -> a -> a), symbol :: Char, precedence :: Int }
+-- | Addition is a total binary op
+plus = Operator (const . const True) (+) '+' 1
+-- | Substraction is a total binary op
+minus = Operator (const . const True) (-) '-' 1
+-- | Multiplication is a total binary op
+multiplication = Operator (const . const True) (*) '*' 2
+-- | Division is a binary op defined for all numbers except divide by zero
+division = Operator (\x y -> y /= 0) div '/' 2
+-- | Integer exponentiation is only defined for positive exponents.
+exponentiation = Operator (\x y -> y >= 0) (^) '^' 3
+
+
+ops :: Integral a => [Operator a]
+ops = [plus, minus, multiplication, division, exponentiation]
+
+constExpr'' :: (Stream s, MonadPlus m, Integral a, Read a)
+            => Int -> a -> ParserT s m a
+constExpr'' prec lhs = choice [operator, constExpr' prec, return lhs]
+    where
+        op o = char (symbol o) >> return o
+        operator = do
+            (Operator c f s p) <- choice . map op $ filter ((> prec) . precedence) ops
+            rhs <- constExpr' p
+            guard (c lhs rhs)
+            constExpr'' prec (f lhs rhs)
+
+constExpr' :: (Stream s, MonadPlus m, Read a, Integral a)
+           => Int -> ParserT s m a
+constExpr' prec = (choice [unsigned, composite] >>= constExpr'' prec)
+    where composite = between (char '(') (char ')') constExpr
+
+
+constExpr :: (Stream s, MonadPlus m, Integral a, Read a) => ParserT s m a
+constExpr = constExpr' 0 <|> (peekChar '-' >> constExpr'' 0 0)
+
+
+immediate :: (MonadPlus m) => ParserT String m Imm
+immediate = choice [number, expr] >>= (pure . Imm)
+    where expr = char '=' >> preprocess (filter $ not . isSpace) >> constExpr
 
 -- | Lazy functions used solely for type-trickery
 sumL :: ((:+:) f g p) -> (f p)
@@ -51,7 +92,7 @@ prodR :: ((:*:) f g p) -> (g p)
 prodR = undefined
 
 class AssemblyArgParser a where
-  argParser :: (Stream s, MonadPlus m) => a -> ParserT s m a
+  argParser :: (MonadPlus m) => a -> ParserT String m a
 
 instance AssemblyArgParser Imm where
   argParser _ = immediate
