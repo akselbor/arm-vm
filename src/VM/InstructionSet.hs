@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
-module InstructionSet
+module VM.InstructionSet
 ( MInt
 , Reg(..)
 , Imm(..)
@@ -24,4 +24,6 @@ data Op = ADD Reg Reg Reg
         | CMP Reg Reg Reg
         | JGT Reg Imm
         | LDI Reg Imm
+        | LOAD Reg Reg
+        | STORE Reg Reg
   deriving (Show, Eq, Generic)

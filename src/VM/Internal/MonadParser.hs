@@ -1,11 +1,14 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternSynonyms #-}
-module Parser
+module VM.Internal.MonadParser
 ( Parser
 , ParserT
+, ParseResult(..)
 , pattern ParserT
 , Stream(..)
+, expectedGot
+, expected
 , runParser
 , choice
 , between
@@ -15,6 +18,7 @@ module Parser
 , sat
 , char
 , string
+, word
 , unsigned
 , number
 , whiteSpace
@@ -42,6 +46,37 @@ import qualified Data.List
 newtype ParserT s m a = ParserT_ (StateT s m a)
     deriving (Functor, Applicative, Monad, Alternative, MonadPlus, MonadTrans)
 
+data ParseResult a = Failure String | Result a
+    deriving (Eq, Show)
+
+instance Alternative ParseResult where
+    lhs@(Result _) <|> _ = lhs
+    _ <|> rhs = rhs
+    empty = Failure "empty"
+
+instance Functor ParseResult where
+    fmap f (Failure msg) = Failure msg
+    fmap f (Result x) = Result (f x)
+
+instance Applicative ParseResult where
+    pure = Result
+    (Failure msg) <*> x = Failure msg
+    f <*> (Failure msg) = Failure msg
+    (Result f) <*> (Result x) = Result (f x)
+
+
+instance Monad ParseResult where
+    return = Result
+    (Failure x) >>= f = Failure x
+    (Result x) >>= f = f x
+    fail = Failure
+
+instance MonadPlus ParseResult where
+    mzero = fail "mzero"
+    mplus = (<|>)
+
+type Parser' a = ParserT String ParseResult a
+
 type Parser a = ParserT String Maybe a
 
 -- | Pattern synonym which allows ParserT to be used as if it
@@ -51,6 +86,7 @@ pattern ParserT p = ParserT_ (StateT p)
 
 runParser :: ParserT s m a -> s -> m (a, s)
 runParser (ParserT p) = p
+
 
 joinT :: Monad m
       => ParserT s m (m a) -> ParserT s m a
@@ -67,7 +103,7 @@ class Stream a where
     uncons = unconsM
 
     unconsM :: MonadPlus m => a -> m (Char, a)
-    unconsM x = maybe mzero return (uncons x)
+    unconsM x = maybe (fail "unexpected eof") return (uncons x)
 
 
 instance Stream String where
@@ -78,6 +114,9 @@ instance Stream Data.ByteString.Char8.ByteString where
 
 instance Stream Data.ByteString.Lazy.Char8.ByteString where
     uncons = Data.ByteString.Lazy.Char8.uncons
+
+expectedGot ex act = fail $ "expected '" ++ ex ++ "', got '" ++ act ++ "'"
+expected ex = word >>= \x -> fail $ "expected " ++ ex ++ ", got " ++ x
 
 -- | Parse a character. Will fail on empty strings
 item :: (Stream s, MonadPlus m)
@@ -96,20 +135,20 @@ sat :: (Stream s, MonadPlus m)
     => (Char -> Bool) -> ParserT s m Char
 sat p = do
     x <- item
-    guard (p x)
+    guard (p x) <|> fail ("unexpected token '" ++ [x] ++ "'")
     return x
 
 -- | Parse the given character, and fail otherwise
 char :: (Stream s, MonadPlus m)
      => Char -> ParserT s m Char
-char = sat . (==)
+char c = sat (== c) <|> (fmap (:[]) item >>= expectedGot [c])
 
 -- | Parse the given character without actually consuming input, or fail otherwise
 peekChar :: (Stream s, MonadPlus m)
          => Char -> ParserT s m Char
 peekChar c = do
     c' <- peek
-    guard (c' == c)
+    guard (c' == c) <|> expectedGot [c] [c']
     return c'
 
 -- | Parse the given string, and fail otherwise
@@ -117,14 +156,16 @@ string :: (Stream s, MonadPlus m)
        => String -> ParserT s m String
 string xs = traverse char xs <|> err xs
   where
-    err xs = do
-      ys <- replicateM (length xs) item
-      fail ("expected \"" ++ xs ++ "\", got " ++ "\"" ++ ys ++ "\"")
+    err xs = choice [replicateM (length xs) item, many item] >>= expectedGot xs
+
+word :: (Stream s, MonadPlus m)
+     => ParserT s m String
+word = many (sat $ not . isSpace)
 
 -- | Attempt all parsers in order. Return the first successful parser
 choice :: (Stream s, MonadPlus m)
        => [ParserT s m a] -> ParserT s m a
-choice = foldr (<|>) mzero
+choice = foldr (<|>) (fail "exhausted choices")
 
 between :: (Stream s, MonadPlus m)
         => ParserT s m open -> ParserT s m close -> ParserT s m a -> ParserT s m a
@@ -139,11 +180,21 @@ whiteSpace :: (Stream s, MonadPlus m)
            => ParserT s m String
 whiteSpace = many (sat isSpace)
 
+decimal :: (Stream s, MonadPlus m) => ParserT s m String
+decimal = some (sat isDigit)
+
+hexadecimal :: (Stream s, MonadPlus m) => ParserT s m String
+hexadecimal = do
+    string "0x"
+    digits <- some $ sat isDigit <|> choice (map char $ ['A'..'Z'] ++ ['a'..'z'])
+    return $ '0' : 'x' : digits
+
+
 -- | Parse a unsigned number
 unsigned :: (Stream s, MonadPlus m, Num a, Read a)
          => ParserT s m a
 unsigned = do
-    xs <- some (sat isDigit) <|> fail "no digits to parse"
+    xs <- hexadecimal <|> decimal <|> fail "no digits to parse"
     (Just num) <- (return $ readMaybe xs) <|> fail ("could not parse \"" ++ xs ++ "\" into a number")
     return num
 

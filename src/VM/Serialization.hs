@@ -1,10 +1,10 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DataKinds #-}
-module Serialization
+module VM.Serialization
 ( asmMnemonic
 , machineCode
 ) where
-import InstructionSet
+import VM.InstructionSet
 import GHC.Generics
 import Data.Char(toLower)
 
@@ -48,6 +48,9 @@ instance MachineCode (f p) => MachineCode (C1 ('MetaCons "JGT" a b) f p) where
 
 instance MachineCode (f p) => MachineCode (C1 ('MetaCons "SUB" a b) f p) where
     machineOp x = bitsFixedWidth 5 5 ++ machineOp (unM1 x)
+
+instance {-# OVERLAPPABLE #-} MachineCode (f p)=> MachineCode (C1 c f p) where
+    machineOp x = "?????" ++ machineOp (unM1 x)
 
 instance MachineCode (f p) => MachineCode (D1 c f p) where
     machineOp = machineOp . unM1

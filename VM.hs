@@ -2,9 +2,9 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE KindSignatures #-}
 module VM where
-import InstructionSet
-import Serialization
-import AssemblyParser
+import VM.InstructionSet
+import VM.Serialization
+import VM.Parser
 
 import GHC.Generics
 import GHC.Types(Symbol)
@@ -16,12 +16,16 @@ import Data.Bits
 
 data VM = VM {
       regs :: UArray MInt MInt
+    , mem :: UArray MInt MInt
     , text :: Array MInt Op
 } deriving (Eq, Show)
 
 sp = Reg 13
 lr = Reg 14
 pc = Reg 15
+
+-- | Instruction width in bytes
+instructionWidth = 4
 
 -- | Registers:
 -- | 1-12 general purpose
@@ -33,22 +37,21 @@ pc = Reg 15
 increaseProgramCounter :: MInt -> VM -> VM
 increaseProgramCounter n vm = vm { regs = regs' }
     where
-        regs' = runSTUArray $ do
-            registers <- unsafeThaw (regs vm)
-            pc <- unsafeRead registers 15
-            unsafeWrite registers 15 (pc + n)
-            return registers
+        regs' = regs vm // [(15, (regs vm ! 15) + n)]
 
 regStore :: VM -> Reg -> MInt -> VM
 regStore vm (Reg reg) val = vm { regs = regs' }
     where
-        regs' = runSTUArray $ do
-            registers <- unsafeThaw (regs vm)
-            unsafeWrite registers (fromIntegral $ reg) val
-            return registers
+        regs' = regs vm // [(fromIntegral reg, val)]
+
+memStore :: VM -> MInt -> MInt -> VM
+memStore vm val offset = vm { mem = mem' }
+    where
+        mem' = mem vm // [(fromIntegral offset, val)]
 
 
-programOffset vm = content vm pc `div` 4
+programOffset vm = offset vm pc
+offset vm reg = content vm reg `div` instructionWidth
 
 -- | The content of an immediate, or the value at a register
 class Content a where
@@ -60,25 +63,34 @@ instance Content Imm where
 instance Content Reg where
     content vm (Reg reg) = regs vm ! reg
 
-data VMExit = SegmentationFault deriving (Eq, Show)
+data VMExit = SegmentationFault
+            | UserExit
+    deriving (Eq, Show)
 
 step :: VM -> Either VMExit VM
 step vm
     | not $ inRange (bounds $ text vm) (programOffset vm) = Left SegmentationFault
-    | otherwise = Right $ execute (text vm ! programOffset vm) vm
+    | otherwise = execute (text vm ! programOffset vm) vm'
+    where vm' = increaseProgramCounter instructionWidth vm
 
 cmp a b = if a < b then 1 else 0
       .|. if a > b then 2 else 0
       .|. if a == b then 4 else 0
 
-regBinaryOp f d a b vm = regStore vm d (f (content vm a) (content vm b))
+regBinaryOp f d a b vm = Right $ regStore vm d (f (content vm a) (content vm b))
 
-execute :: Op -> VM -> VM
+execute :: Op -> VM -> Either VMExit VM
 execute (ADD d a b) vm = regBinaryOp (+) d a b vm
 execute (SUB d a b) vm = regBinaryOp (-) d a b vm
 execute (MUL d a b) vm = regBinaryOp (*) d a b vm
 execute (CMP d a b) vm = regBinaryOp cmp d a b vm
-execute (LDI d imm) vm = regStore vm d (content vm imm)
-execute (JGT d imm) vm = case (content vm d .|. 1) == 1 of
+execute (LDI d imm) vm = Right $ regStore vm d (content vm imm)
+execute (JGT d imm) vm = case (content vm d .|. 2) == 2 of
     True -> regBinaryOp (+) pc pc imm vm
-    False -> vm
+    False -> Right vm
+execute (LOAD d a) vm
+    | not $ inRange (bounds $ mem vm) (offset vm a) = Left SegmentationFault
+    | otherwise = Right $ regStore vm d (mem vm ! offset vm a)
+execute (STORE s d) vm
+    | not $ inRange (bounds $ mem vm) (offset vm d) = Left SegmentationFault
+    | otherwise = Right $ memStore vm (content vm s) (offset vm d)
