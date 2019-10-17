@@ -1,8 +1,10 @@
+module Interpreter where
 import VM
-import InstructionSet
-import Serialization
-import Parser
-import AssemblyParser
+import VM.Internal.MonadParser
+import VM.InstructionSet
+import VM.Serialization
+import VM.Parser
+--import VM.AssemblyParser
 import System.IO(hFlush, stdin, stdout, hSetBuffering, BufferMode(..))
 import System.Environment(getArgs)
 import System.Process(system)
