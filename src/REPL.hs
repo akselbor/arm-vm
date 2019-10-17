@@ -1,7 +1,8 @@
+module REPL where
 import VM
 import VM.InstructionSet
 import VM.Serialization
-import VM.Internal.Parser
+import VM.Internal.MonadParser
 import VM.Parser
 import System.IO(hFlush, stdin, stdout, hSetBuffering, BufferMode(..))
 import System.Environment(getArgs)

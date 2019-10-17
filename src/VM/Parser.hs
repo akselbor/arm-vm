@@ -13,6 +13,7 @@ import VM.InstructionSet
 import GHC.Generics
 import Data.Char(isDigit, isSpace, toLower)
 import Control.Monad(MonadPlus, guard)
+import Control.Monad.Fail(MonadFail)
 
 --parseProgram :: String -> ParseResult [Op]
 parseProgram xs = do
@@ -20,7 +21,7 @@ parseProgram xs = do
     guard (all (all isSpace) $ fmap snd parsedOps) <|> fail "encountered unconsumed input"
     return (map fst parsedOps)
 
-parseAssembly :: MonadPlus m => String -> m [(Op, String)]
+parseAssembly :: (MonadPlus m, MonadFail m) => String -> m [(Op, String)]
 parseAssembly = traverse id
     . zipWith runParser parsers
     . filter (not . all isSpace)
@@ -30,17 +31,17 @@ parseAssembly = traverse id
     where parsers = map (\n -> opParser <|> fail ("error: syntax error on statement " ++ show n)) [1..]
 
 
-opParseLines :: MonadPlus m => String -> m [(Op, String)]
+opParseLines :: (MonadPlus m, MonadFail m) => String -> m [(Op, String)]
 opParseLines = traverse (runParser opParser)
              . filter (not . all isSpace)
              . fmap (takeWhile (/= ';'))
              . lines
              . fmap toLower
 
-opParser :: (MonadPlus m) => ParserT String m Op
+opParser :: (MonadPlus m, MonadFail m) => ParserT String m Op
 opParser = fmap to . argParser . from $ (undefined :: Op)
 
-register :: (Stream s, MonadPlus m) => ParserT s m Reg
+register :: (Stream s, MonadPlus m, MonadFail m) => ParserT s m Reg
 register = do
   whiteSpace
   string "%r"
@@ -68,7 +69,7 @@ exponentiation = Operator (\x y -> y >= 0) (^) '^' 3
 ops :: Integral a => [Operator a]
 ops = [plus, minus, multiplication, division, exponentiation]
 
-constExpr'' :: (Stream s, MonadPlus m, Integral a, Read a)
+constExpr'' :: (Stream s, MonadPlus m, MonadFail m, Integral a, Read a)
             => Int -> a -> ParserT s m a
 constExpr'' prec lhs = choice [operator, constExpr' prec, return lhs]
     where
@@ -79,17 +80,17 @@ constExpr'' prec lhs = choice [operator, constExpr' prec, return lhs]
             guard (c lhs rhs)
             constExpr'' prec (f lhs rhs)
 
-constExpr' :: (Stream s, MonadPlus m, Read a, Integral a)
+constExpr' :: (Stream s, MonadPlus m, MonadFail m, Read a, Integral a)
            => Int -> ParserT s m a
 constExpr' prec = (choice [unsigned, composite] >>= constExpr'' prec)
     where composite = between (char '(') (char ')') constExpr
 
 
-constExpr :: (Stream s, MonadPlus m, Integral a, Read a) => ParserT s m a
+constExpr :: (Stream s, MonadPlus m, MonadFail m, Integral a, Read a) => ParserT s m a
 constExpr = constExpr' 0 <|> (peekChar '-' >> constExpr'' 0 0)
 
 
-immediate :: (MonadPlus m) => ParserT String m Imm
+immediate :: (MonadPlus m, MonadFail m) => ParserT String m Imm
 immediate = choice [number, expr] >>= (pure . Imm)
     where expr = char '=' >> preprocess (filter $ not . isSpace) >> constExpr
 
@@ -113,7 +114,7 @@ right :: Either a b -> b
 right = undefined
 
 class AssemblyArgParser a where
-  argParser :: (MonadPlus m) => a -> ParserT String m a
+  argParser :: (MonadPlus m, MonadFail m) => a -> ParserT String m a
 
 instance AssemblyArgParser Imm where
   argParser _ = immediate

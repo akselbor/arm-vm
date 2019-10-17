@@ -30,6 +30,7 @@ module VM.Internal.MonadParser
 
 import Control.Applicative
 import Control.Monad
+import Control.Monad.Fail(MonadFail)
 import Control.Monad.State
 import Data.Char(isSpace, isDigit)
 import Data.Maybe(maybe)
@@ -40,11 +41,13 @@ import qualified Data.ByteString.Char8
 import qualified Data.ByteString.Lazy.Char8
 import qualified Data.List
 
+import qualified Control.Monad.Fail
+
 
 -- | A Monadic parser. *Heavily* based on http://www.cs.nott.ac.uk/~pszgmh/pearl.pdf
 -- | Previous ParserT definition was equivalent to StateT, so now it's simply a StateT wrapper
 newtype ParserT s m a = ParserT_ (StateT s m a)
-    deriving (Functor, Applicative, Monad, Alternative, MonadPlus, MonadTrans)
+    deriving (Functor, Applicative, Monad, Alternative, MonadPlus, MonadTrans, MonadFail)
 
 data ParseResult a = Failure String | Result a
     deriving (Eq, Show)
@@ -74,6 +77,9 @@ instance Monad ParseResult where
 instance MonadPlus ParseResult where
     mzero = fail "mzero"
     mplus = (<|>)
+
+instance MonadFail ParseResult where
+    fail _ = mzero
 
 type Parser' a = ParserT String ParseResult a
 
@@ -191,7 +197,7 @@ hexadecimal = do
 
 
 -- | Parse a unsigned number
-unsigned :: (Stream s, MonadPlus m, Num a, Read a)
+unsigned :: (Stream s, MonadPlus m, MonadFail m, Num a, Read a)
          => ParserT s m a
 unsigned = do
     xs <- hexadecimal <|> decimal <|> fail "no digits to parse"
@@ -199,7 +205,7 @@ unsigned = do
     return num
 
 -- | Parse a number
-number :: (Stream s, MonadPlus m, Num a, Read a)
+number :: (Stream s, MonadPlus m, MonadFail m, Num a, Read a)
        => ParserT s m a
 number = do
     negative <- (char '-' >> return True) <|> return False

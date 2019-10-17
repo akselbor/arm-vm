@@ -1,2 +1,3 @@
-# arm_vm
+# arm-vm
+
 Implements a simple virtual machine for a subset of the ARM instruction set
