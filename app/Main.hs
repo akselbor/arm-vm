@@ -11,6 +11,6 @@ main = do
     case args of
         ["--repl"] -> REPL.main
         ["-r"] -> REPL.main
-        ["--interpreter"] -> Interpreter.main'
-        ["-i"] -> Interpreter.main'
+        ["--interpreter"] -> Interpreter.main
+        ["-i"] -> Interpreter.main
         _ -> Interpreter.main
