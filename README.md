@@ -82,23 +82,24 @@ This should result in the output presented below, with the `>` denoting the prog
 
 Memory
 0x00000000: 0x00000000
+0x00000004: 0x00000000
 
 
 Registers
-%r0 = 0x00000000        %r8 = 0x00000000
-%r1 = 0x00000000        %r9 = 0x00000000
-%r2 = 0x00000000        %r10 = 0x00000000
-%r3 = 0x00000000        %r11 = 0x00000000
-%r4 = 0x00000000        %r12 = 0x00000000
-%r5 = 0x00000000        sp = 0x00000000
-%r6 = 0x00000000        lr = 0x00000000
-%r7 = 0x00000000        pc = 0x00000000
+%r0 = 0x00000000	%r8 = 0x00000000
+%r1 = 0x00000000	%r9 = 0x00000000
+%r2 = 0x00000000	%r10 = 0x00000000
+%r3 = 0x00000000	%r11 = 0x00000000
+%r4 = 0x00000000	%r12 = 0x00000000
+%r5 = 0x00000000	sp = 0x00000000
+%r6 = 0x00000000	lr = 0x00000000
+%r7 = 0x00000000	pc = 0x00000000
 
 
 Instruction stream
- > 0x00000000:  ldi %r15, 0
-   0x00000004:  ldi %r14, 100
-   0x00000008:  ldi %r13, 1
+ > 0x00000000:  ldi %r9, 0
+   0x00000004:  ldi %r8, 100
+   0x00000008:  ldi %r7, 1
    0x0000000c:  ldi %r0, 0
    0x00000010:  ldi %r1, 1
    0x00000014:  ldi %r2, 1
@@ -107,8 +108,8 @@ Instruction stream
    0x00000020:  sub %r1, %r1, %r1
    0x00000024:  add %r1, %r1, %r2
    0x00000028:  add %r2, %r2, %r0
-   0x0000002c:  add %r15, %r15, %r13
-   0x00000030:  cmp %r12, %r14, %r15
+   0x0000002c:  add %r9, %r9, %r7
+   0x00000030:  cmp %r12, %r8, %r9
    0x00000034:  jgt %r12, -32
 ```
 From here, you can gradually step through instructions one by one by pressing enter.
