@@ -59,20 +59,20 @@ This will then prompt you for a file, which ought to contain a header consisting
 
 For instance, consider the program below, which will iteratively calculate the first `n` (100 in this case) fibonacci numbers:
 ```
-0x0 0x0
-ldi %r15, 0       ; How many how many iterations we've performed
-ldi %r14, 100     ; How many Fibonacci numbers to calculate 
-ldi %r13, 1       ; Used for decrement
-ldi %r0, 0        ; The n-th Fibonacci number
-ldi %r1, 1        ; The (n+1)-th Fibonacci number
-ldi %r2, 1        ; The (n+2)-th Fibonacci number
+0x0 0x4
+ldi %r9, 0  ; How many how many iterations we've performed
+ldi %r8, 100 ; How many Fibonacci numbers to calculate
+ldi %r7, 1  ; Used for decrement
+ldi %r0, 0  ; The n-th Fibonacci number
+ldi %r1, 1  ; The (n+1)-th Fibonacci number
+ldi %r2, 1  ; The (n+2)-th Fibonacci number
 sub %r0, %r0, %r0 ; Zero r2
 add %r0, %r0, %r1 ; Move r3 -> r2 (increase fib)
 sub %r1, %r1, %r1 ; Zero r3
 add %r1, %r1, %r2 ; Move r4 -> r3 (increase fib)
 add %r2, %r2, %r0 ; Calculate next Fibonacci number
-add %r15, %r15, %r13 ; Increment the loop counter
-cmp %r12, %r14, %r15 ; Have we calculated the wanted number of numbers (r14 > r15)? If not, we'll calculate another one.
+add %r9, %r9, %r7 ; Increment the loop counter
+cmp %r12, %r8, %r9 ; r8 > r9? Branch back if true
 jgt %r12, -32
 ```
 Here, the first line represents the memory region that ought to be available to the program (mandatory). The rest of the lines contain the instruction stream.
