@@ -151,5 +151,9 @@ main' = do
 
     -- | Interpret until the end.
     exit <- evalStateT (attemptReload >> interpret) int-- interpreter-- interpret vm
+
+    -- | Re-enable echoing to the console
+    system "stty echo"
+
     print exit
     return ()
